@@ -23,24 +23,86 @@ def get_intro(file_path: str) -> str:
             break
 
     if intro_start == -1:
-        RuntimeError("Could not find introduction")
-    intro_end = len(lines) - 1 if intro_end > 0 else intro_end
+        RuntimeError("Could not find introduction. Ensure paper has a introduction section header.")
+    intro_end = len(lines) - 1 if intro_end == -1 else intro_end
 
     return ' '.join(lines[intro_start:intro_end])
+
+
+def get_conclusion(file_path: str) -> str:
+    input_file = open(file_path, 'r')
+    lines = input_file.readlines()
+
+    conclusion_start = -1
+    conclusion_end = -1
+    found_conclusion = False
+
+    for i, line in enumerate(lines):
+        if not found_conclusion and '\\section{' in line and 'Conclusion' in line:  # Conclusions sometimes have other words in their titles, check for this separately
+            conclusion_start = i
+            found_conclusion = True
+            continue
+
+        if found_conclusion and '\\section{' in line:
+            conclusion_end = i
+            break
+
+        if found_conclusion and '\\end{document}' in line:  # sometimes papers don't have any more sections after the conclusion, so look for the end of the doc instead
+            conclusion_end = i
+            break
+
+    if conclusion_start == -1:
+        RuntimeError("Could not find conclusion. Ensure paper has a conclusion section header.")
+    conclusion_end = len(lines) - 1 if conclusion_end == -1 else conclusion_end
+
+    conclusion_sents = ' '.join(lines[conclusion_start:conclusion_end])
+
+    return conclusion_sents
+
+
+def get_body(file_path: str) -> str:
+    input_file = open(file_path, 'r')
+    lines = input_file.readlines()
+    return ' '.join(lines)
 
 
 # clean unwanted stuff
 def clean_section(section: str) -> str:
     lines = section.split('\n')
 
+    # lines = []
+    # skip_next = False
+    # for i in range(0, len(original_lines) - 1):
+    #     if skip_next:
+    #         skip_next = False
+    #         continue
+    #     first_line = original_lines[i]
+    #     second_line = original_lines[i + 1]
+    #
+    #     if len(first_line) == 0 or len(second_line) == 0:
+    #         continue
+    #
+    #     if second_line[0] == ')':
+    #         lines.append(first_line + second_line)
+    #         skip_next = True
+    #     else:
+    #         lines.append(first_line)
+    #
+    # print(lines)
+
     # Remove latex metadata
-    lines = [re.sub(r'\\.+}', '', line) for line in lines]
+    #lines = [re.sub(r'\\.+}', '', line) for line in lines]
+    lines = [re.sub(r'\\[a-zA-Z]+\{.*?}', '', line) for line in lines]
+
 
     # Remove leading and trailing whitespace including newlines
     lines = [line.lstrip().rstrip() for line in lines]
 
+
     # Remove empty and very short lines
     lines = [line for line in lines if len(line) > 1]
+
+    lines = [re.sub(r'\[.+]+?', '', line) for line in lines]
 
     # Remove table entries and other latex syntax
     lines = [line for line in lines
@@ -57,12 +119,18 @@ def to_sentences(section: str) -> list:
     sentences_clean = []
     i = 0
     end = len(sentences) - 1
+    sent_builder = ''
     while i < end:
+        sent_builder += sentences[i]
         if sentences[i + 1][0].islower():
-            sentences_clean.append(sentences[i] + " " + sentences[i + 1])
-            i += 2
+            sent_builder += ' '
+            if i == end - 1:
+                sentences_clean.append(sent_builder)
+                sent_builder = ''
+            i += 1
         else:
-            sentences_clean.append(sentences[i])
+            sentences_clean.append(sent_builder)
+            sent_builder = ''
             i += 1
     return sentences_clean
 
